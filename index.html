@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Elastic Beanstalk</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        font-size:14px;
+        -moz-transition-property: text-shadow;
+        -moz-transition-duration: 4s;
+        -webkit-transition-property: text-shadow;
+        -webkit-transition-duration: 4s;
+        transition-property: text-shadow;
+        transition-duration: 4s;
+        text-shadow: none;
+      }
+      body.blurry {
+        -moz-transition-property: text-shadow;
+        -moz-transition-duration: 4s;
+        -webkit-transition-property: text-shadow;
+        -webkit-transition-duration: 4s;
+        text-shadow: #fff 0px 0px 25px;
+        transition-property: text-shadow;
+        transition-duration: 4s;
+      }
+      a {
+        color: #55aaff;
+      }
+      .linktxt {
+          cursor: pointer;
+          text-decoration: underline;
+      }
+      .stocksColumn, .chartColumn {
+        padding: 2em;
+      }
+      .stocksColumn {
+        color: #ffffff;
+        position: absolute;
+        overflow: auto;
+        width: 25%;
+        top: 0px;
+        right: 30%;
+        bottom: 0px;
+        left: 0px;
+        text-align: left;
+        padding-top: 2em;
+        background-color: #73A53E;
+
+      }
+      .chartColumn {
+        color: #73a53e;
+        position: absolute;
+        top:0px;
+        right: 0px;
+        bottom: 0px;
+        left: 30%;
+
+        background-color: #FFFFFF;
+      }
+
+      h1 {
+        color: #33342D;
+        font-size: 300%;
+        font-weight: normal;
+        margin-bottom: 0em;
+      }
+      h2 {
+        font-size: 200%;
+        font-weight: normal;
+        margin-bottom: 0em;
+      }
+      ul {
+        padding-left: 1em;
+        margin: 0px;
+      }
+      li {
+        margin: 1em 0em;
+      }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.7.1/Chart.bundle.js"></script>
+    <script src="https://code.jquery.com/jquery-3.2.1.min.js"></script>
+    <script src="./simData.js"></script>
+    <script src="./myStocks.js"></script>
+    <script>
+      var config = {
+        type: 'line',
+        data: {
+            labels: ["January", "February", "March", "April", "May", "June", "July"],
+            datasets: [{
+                label: "My First dataset",
+                showLine: true,
+                lineTension: 0,
+                pointRadius: 0,
+                backgroundColor: 'rgb(0, 0, 255)',
+                borderColor: 'rgb(0, 0, 255)',
+                xAxisID: 'time',
+                data: [
+                    {x: 1, y: 1},
+                    {x: 2, y: 1},
+                    {x: 3, y: 1},
+                    {x: 4, y: 1},
+                    {x: 5, y: 1},
+                    {x: 6, y: 1},
+                    {x: 7, y: 1}
+                ],
+                fill: false
+            }
+          ]
+        },
+        options: {
+            responsive: true,
+            title:{
+                display:true,
+                text:'Stock Price Data'
+            },
+            tooltips: {
+                mode: 'index',
+                intersect: false,
+            },
+            hover: {
+                mode: 'nearest',
+                intersect: true
+            },
+            scales: {
+                xAxes: [{
+                    display: true,
+                    type: 'linear',
+                    id: 'time',
+                    scaleLabel: {
+                        display: true,
+                        labelString: 'Time'
+                    }
+                }],
+                yAxes: [{
+                    display: true,
+                    scaleLabel: {
+                        display: true,
+                        labelString: 'Price'
+                    }
+                }]
+            }
+        }
+      };
+
+      var DefaultDataset = 
+      {
+        label: "My Second dataset",
+        showLine: false,
+        lineTension: 0,
+        pointRadius: 0,
+        backgroundColor: 'rgb(255, 0, 0)',
+        borderColor: 'rgb(255, 0, 0)',
+        xAxisID: 'time',
+        data: [
+
+        ],
+        fill: false
+      };
+
+      function setCurrentEvent(str) {
+        document.getElementById("currentEvent").innerText = str;
+      }
+
+      var tSeries = "TIME_SERIES_INTRADAY";
+      var tInterval = "1min";
+      var endDateValue = new Date();
+      var currStockSym = "1"; //S&P 500 Index
+      var prevInterval = "1d";
+      var stockSymbolList = [];
+
+      //TIME_SERIES_INTRADAY (tInterval = 1min | 5min | 15min | 30min | 60min)
+      //TIME_SERIES_DAILY (tInterval = Daily)
+      function setTimeInterval(interval) {
+        var DAYS_TO_MS = 24*60*60*1000;
+        var startDateValue = new Date();
+        var currDay = startDateValue.getDay();
+
+        // set the time to make sure we fall on M-F
+        // if Sun then subtract 2 days (in milliseconds)
+        // if Sat then subtract 1 day
+        var DayOffsetLookup = [2*DAYS_TO_MS,0,0,0,0,0,1*DAYS_TO_MS];
+        startDateValue.setTime(startDateValue.getTime() - DayOffsetLookup[currDay]);
+
+        // modify tSeries and tInterval to ensure we get the proper amount of
+        // data to fill the requested time interval
+        switch(interval) {
+          case "1d":
+            tSeries = "TIME_SERIES_INTRADAY";
+            tInterval = "1min";
+            endDateValue.setTime(startDateValue.getTime());
+            endDateValue.setHours(1);
+            break;
+          case "5d":
+            tSeries = "TIME_SERIES_INTRADAY";
+            tInterval = "15min";
+            endDateValue.setTime(startDateValue.getTime() - 5*DAYS_TO_MS);
+            break;
+          case "3m":
+            tSeries = "TIME_SERIES_INTRADAY";
+            tInterval = "60min";
+            endDateValue.setTime(startDateValue.getTime());
+            endDateValue.setMonth(endDateValue.getMonth() - 3);
+            break;
+          case "6m":
+            tSeries = "TIME_SERIES_INTRADAY";
+            tInterval = "60min";
+            endDateValue.setTime(startDateValue.getTime());
+            endDateValue.setMonth(endDateValue.getMonth() - 6);
+            break;
+          case "1y":
+            tSeries = "TIME_SERIES_DAILY";
+            tInterval = "Daily";
+            endDateValue.setTime(startDateValue.getTime());
+            endDateValue.setFullYear(startDateValue.getFullYear() - 1);
+            break;
+          default:
+            console.log("Unknown Interval:" + interval);
+            tSeries = "TIME_SERIES_INTRADAY";
+            tInterval = "1min";
+            endDateValue.setTime(startDateValue.getTime());
+            break;
+        }
+      }
+
+      // this function requests price data for the given stock symbol
+      // and waits for the data before finishing by using a promise
+      function getData(id) {
+
+        return new Promise(function(resolve, reject) {
+
+          var dataAPI1 = "https://www.alphavantage.co/query?";
+          var dataAPI2 = "function=" + tSeries;
+          var stockSym = $("#stockSym"+id).text();
+          var dataAPI3 = "&symbol=" + stockSym;
+          var dataAPI4 = "&interval=" + tInterval;
+          var dataAPI5 = "&outputsize=full&apikey=M3JGAXUCWZSS1QMY";
+          var priceData = [];
+  
+          setCurrentEvent("Collecting Data...");
+  
+          $.getJSON(dataAPI1+dataAPI2+dataAPI3+dataAPI4+dataAPI5,{format:"json"}
+          ).done(function(data){
+            //var data = simData;
+            //console.log(stockSym);
+            if( data == null || data['Meta Data'] == undefined || data == {} ) {
+              console.log("GET data failed");
+              setCurrentEvent("Collection FAILED");
+            }
+            else {
+              //console.log(data['Meta Data']['2. Symbol']);
+              setCurrentEvent("Collection Complete");
+
+              var pData = data['Time Series (' + tInterval + ')'];
+              var currDateValue = "";
+              var openPrice = {};
+
+              Object.keys(pData).forEach(function(k) {
+                //console.log(k + " " + k.split("-")[0]);
+                var tdate =  k.split("-");
+                var year = tdate[0];
+                var month = parseInt(tdate[1]) - 1;
+                var day = tdate[2].slice(0,2);
+                tdate = k.split(" ");
+                var hour = 0;
+                var minute = 0;
+
+                if(tdate[1] != undefined) {
+                  hour = tdate[1].slice(0,2);
+                  minute = tdate[1].slice(3,5);
+                }
+                currDateValue = new Date(year,month,day,hour,minute,0,0);
+                if(currDateValue >= endDateValue){
+                  // the data is stored from end of time period to beginning
+                  // but we want this reversed so use unshift instead of push
+                  priceData.unshift({x: 0, y: pData[k]['4. close']});
+
+                  // keep overwriting the openPrice until we get to the last datapoint
+                  // at which point it will be the actual openPrice for this dataset
+                  openPrice = {x:0,  y: pData[k]['1. open']};
+                }
+              });
+
+              // add the open price as the first data point
+              priceData.unshift(openPrice);
+  
+              // because we filled the data from the end to the beginning we need to go back
+              // and populate the 'x' value with an incrementing value from
+              // beginning to end
+              for(var ii=0; ii<priceData.length; ii++){
+                priceData[ii].x = ii;
+              }
+            }
+            resolve(priceData);
+          });
+        });
+      }
+
+      function populateChart(id, dataSetIndex, priceData) {
+        if(priceData.length > 0) {
+          //var data = getData(id);
+          var idx = 0;
+          var stockSym = $("#stockSym"+id).text();
+          
+          // reset the length of the data to "delete" the previous data
+          config.data.datasets[dataSetIndex].data.length = 0;
+  
+          // set the label and title text of the chart
+          config.data.datasets[dataSetIndex].label = stockSym;
+          config.options.title.text = $("#stockName"+id).text();
+          
+          // add the data to the chart
+          priceData.forEach( element => {
+            config.data.datasets[dataSetIndex].data.push(element);
+            idx++;
+          });
+          
+          // now that the data is set, show it
+          // and update the chart
+          config.data.datasets[dataSetIndex].showLine = true;
+          window.myLine.update();
+        }
+      }
+
+      function populatePriceChange(dataSetIndex, priceData) {
+        if(priceData.length > 0) {
+          var startPrice = priceData[0].y;
+          var endPrice = priceData[priceData.length-1].y;
+          //console.log(startPrice + " " + endPrice + " " + (((endPrice/startPrice)- 1.0)*100).toFixed(3));
+          
+          // compute and populate the price change in dollars
+          var clrVal = "";            
+          var change = endPrice - startPrice;
+          if(change >= 0.0) {
+            clrVal = "color: #00ff00";
+          }
+          else {
+            clrVal = "color: #ff0000";
+          }
+          $("#priceChange").text(change.toFixed(2));
+          $("#priceChange").attr("style",clrVal)
+          
+          // compute and populate the price change in percent
+          change = ((endPrice/startPrice)- 1.0) * 100;
+          $("#percentChange").text("  (" + change.toFixed(3) + "%)");
+          $("#percentChange").attr("style",clrVal);
+        }
+      }
+
+      function updateTimeInterval(interval) {
+
+        $("#"+prevInterval).attr("style", "color: #73a53e");
+
+        setTimeInterval(interval);
+        
+        $("#"+interval).attr("style", "color: #0000ff");
+
+        prevInterval = interval;
+
+      }
+
+      function isInList(str, list) {
+        // search for the str in the list and if its found
+        // then return true otherwise false
+        list.forEach(element => {
+          if(list[element] == str) {
+            return true;
+          }
+        });
+
+        return false;
+      }
+
+      function processMyStocks() {
+        var myTag = "";
+        var count = 1;
+
+        // for each stock in the list
+        for(s in myStocks) {
+          // if we haven't already added this stock to the list then
+          // add it to the list and add it to the stockList ul element on the page
+          if(isInList( myStocks[s]['Symbol'], stockSymbolList) == false) {
+
+            stockSymbolList.push( myStocks[s]['Symbol']);
+
+            // create an li element to contain all of the following elements
+            var t_li = document.createElement('li');
+  
+            //create a span element to store the stock symbol and handle the onclick event
+            var t_span = document.createElement('span');
+            t_span.innerHTML = myStocks[s]['Symbol'];
+            t_span.className = "linktxt";
+            t_span.id = "stockSym" + count;
+            t_span.myNum = count;
+            t_span.onclick = function () { executeDataSequence(this.myNum) };
+            
+            // append the stock symbol span
+            t_li.appendChild(t_span);
+  
+            // create and append some separator text
+            var t_span = document.createElement('span');
+            t_span.innerHTML = " - ";
+            t_li.appendChild(t_span);
+            
+            //create another span element to store the formal stock name
+            t_span = document.createElement('span');
+            t_span.innerHTML = myStocks[s]['Name'];
+            t_span.id = "stockName" + count;
+  
+            // append the stock name span
+            t_li.appendChild(t_span);
+  
+            count++;         
+            
+            document.getElementById("stockList").appendChild(t_li);
+          }
+          
+        }
+      }
+
+      function addDataSet(idx) {
+        console.log("addData " + idx);
+      }
+
+      function executeDataSequence(id) {
+        
+        // save the new current stock symbol
+        currStockSym = id;
+        
+        // get the data for this stock
+        //var priceData = [];
+        getData(id).then(function (priceData) {
+
+          // add the data to the chart
+          populateChart(id, 0, priceData);
+
+          // add the price change information to the page
+          populatePriceChange(0, priceData);
+        });
+      }
+
+      function executeIntervalSequence(interval) {
+        
+        updateTimeInterval(interval);
+
+        executeDataSequence(currStockSym);
+      }
+
+      window.onload = function() {
+        var ctx = document.getElementById("canvas").getContext("2d");
+        window.myLine = new Chart(ctx, config);
+        
+        // add all of my stocks to the page
+        processMyStocks();
+
+        // initialize the interval to 1d
+        updateTimeInterval("1d");
+        
+        // execute the sequence to add the data to the 
+        // chart and price change elements
+        executeDataSequence("1");
+
+      };
+
+    </script>
+
+  </head>
+  <body>
+    <div class="stocksColumn">
+      <h1>Invest Data</h1>
+      <ul class="stockList" id="stockList">
+      </ul>
+    </div>
+    <div class="chartColumn">
+      <h2>Stock Price Data Charts</h2>
+      <div>
+        <span id="1d" class="linktxt" onclick='executeIntervalSequence("1d")'>1d</span>
+        <span id="5d" class="linktxt" onclick='executeIntervalSequence("5d")'>5d</span>
+        <span id="3m" class="linktxt" onclick='executeIntervalSequence("3m")'>3m</span>
+        <span id="6m" class="linktxt" onclick='executeIntervalSequence("6m")'>6m</span>
+        <span id="1y" class="linktxt" onclick='executeIntervalSequence("1y")'>1y</span>
+      </div>
+      <canvas id="canvas"></canvas>
+      <div>
+        <span>Change: </span><span id="priceChange"></span><span id="percentChange"></span>
+      </div>
+      <br>
+      <div>
+        <form>
+          <span>Add Dataset: </span>
+          <span><input type="checkbox" onclick="addDataSet(0)">S&P 500</span>
+          <span><input type="checkbox" onclick="addDataSet(1)">NASDAQ</span>
+          <span><input type="checkbox" onclick="addDataSet(2)">DOW</span>
+        </form>
+      </div>
+      <div>
+        <h2 id="currentEvent">Collection Complete</h2>
+      </div>
+    </div>
+  </body>
+</html>
