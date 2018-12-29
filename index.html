@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>Elastic Beanstalk</title>
+    <title>InvestData</title>
     <style>
       body {
         font-family: Arial, sans-serif;
@@ -236,23 +236,25 @@
           var dataAPI5 = "&outputsize=full&apikey=M3JGAXUCWZSS1QMY";
           var priceData = [];
   
-          setCurrentEvent("Collecting Data...");
+          setCurrentEvent("Collecting " + stockSym + " Data...");
   
           $.getJSON(dataAPI1+dataAPI2+dataAPI3+dataAPI4+dataAPI5,{format:"json"}
           ).done(function(data){
             //var data = simData;
             //console.log(stockSym);
             if( data == null || data['Meta Data'] == undefined || data == {} ) {
-              console.log("GET data failed");
-              setCurrentEvent("Collection FAILED");
+              console.log("GET " + stockSym + " data failed");
+              setCurrentEvent(stockSym + " Collection FAILED");
             }
             else {
               //console.log(data['Meta Data']['2. Symbol']);
-              setCurrentEvent("Collection Complete");
+              setCurrentEvent(stockSym + " Collection Complete");
 
               var pData = data['Time Series (' + tInterval + ')'];
               var currDateValue = "";
               var openPrice = {};
+              var currentData = false;
+              var prevCloseFound = false;
 
               Object.keys(pData).forEach(function(k) {
                 //console.log(k + " " + k.split("-")[0]);
@@ -264,12 +266,18 @@
                 var hour = 0;
                 var minute = 0;
 
+                currentData = false;
+
                 if(tdate[1] != undefined) {
                   hour = tdate[1].slice(0,2);
                   minute = tdate[1].slice(3,5);
                 }
                 currDateValue = new Date(year,month,day,hour,minute,0,0);
                 if(currDateValue >= endDateValue){
+
+                  // if we found data within our time range
+                  currentData = true;
+
                   // the data is stored from end of time period to beginning
                   // but we want this reversed so use unshift instead of push
                   priceData.unshift({x: 0, y: pData[k]['4. close']});
@@ -278,10 +286,21 @@
                   // at which point it will be the actual openPrice for this dataset
                   openPrice = {x:0,  y: pData[k]['1. open']};
                 }
-              });
+                // the first price data point outside of our date range is the 
+                // previous days close, so grab it
+                else if(currentData == false && prevCloseFound == false) {
+                  
+                  prevCloseFound = true;
+                  
+                  // first add the last collected open price which is the
+                  // open price for the day
+                  priceData.unshift(openPrice);
 
-              // add the open price as the first data point
-              priceData.unshift(openPrice);
+                  // then add the closing price from the previous day
+                  priceData.unshift({x:0, y: pData[k]['4. close']});
+
+                }
+              });
   
               // because we filled the data from the end to the beginning we need to go back
               // and populate the 'x' value with an incrementing value from
@@ -359,15 +378,17 @@
       }
 
       function isInList(str, list) {
+        var inList = false;
+
         // search for the str in the list and if its found
         // then return true otherwise false
         list.forEach(element => {
-          if(list[element] == str) {
-            return true;
+          if(element == str) {
+            inList = true;
           }
         });
 
-        return false;
+        return inList;
       }
 
       function processMyStocks() {
@@ -376,6 +397,7 @@
 
         // for each stock in the list
         for(s in myStocks) {
+        //  s=3;
           // if we haven't already added this stock to the list then
           // add it to the list and add it to the stockList ul element on the page
           if(isInList( myStocks[s]['Symbol'], stockSymbolList) == false) {
@@ -427,7 +449,7 @@
         currStockSym = id;
         
         // get the data for this stock
-        //var priceData = [];
+        var priceData = [];
         getData(id).then(function (priceData) {
 
           // add the data to the chart
@@ -445,12 +467,27 @@
         executeDataSequence(currStockSym);
       }
 
+      function collectPriceData() {
+        // the first three stock symbols are indexes (S&P500,NASDAQ,DOW)
+        // but we only want to collect data for the stocks in the list
+        for(s=3; s<stockSymbolList.length; s++) {
+          getData(s).then(function (priceData){
+            if(priceData.length > 0) {
+              console.log(stockSymbolList[s] + ":" + priceData[priceData.length-1].y);
+            }
+          });
+        };
+      }
+
       window.onload = function() {
         var ctx = document.getElementById("canvas").getContext("2d");
         window.myLine = new Chart(ctx, config);
         
         // add all of my stocks to the page
         processMyStocks();
+        
+        // collect the price data for each stock
+        //collectPriceData();
 
         // initialize the interval to 1d
         updateTimeInterval("1d");

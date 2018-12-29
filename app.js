@@ -1,8 +1,8 @@
 var port = process.env.PORT || 3000,
     http = require('http'),
     fs = require('fs'),
-    html = fs.readFileSync('index.html');
-    mystocksjs = fs.readFileSync('myStocks.js');
+    html = fs.readFileSync('index.html'),
+    mystocksjs = fs.readFileSync('myStocks.js'),
     simdatajs = fs.readFileSync('simData.js');
 
 var log = function(entry) {
@@ -46,8 +46,15 @@ var server = http.createServer(function (req, res) {
     }
 });
 
+function periodicTask() {
+    log("Jeff's Periodic Task");
+}
+
 // Listen on port 3000, IP defaults to 127.0.0.1
 server.listen(port);
+
+// add a periodic task for performing backend management functions
+setInterval(periodicTask, 60000);
 
 // Put a friendly message on the terminal
 console.log('Server running at http://127.0.0.1:' + port + '/');
