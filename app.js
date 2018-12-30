@@ -1,12 +1,13 @@
 var port = process.env.PORT || 3000,
     http = require('http'),
     fs = require('fs'),
+    dataCollection = require('./dataCollection'),
     html = fs.readFileSync('index.html'),
     mystocksjs = fs.readFileSync('myStocks.js'),
     simdatajs = fs.readFileSync('simData.js');
 
 var log = function(entry) {
-    fs.appendFileSync('/tmp/sample-app.log', new Date().toISOString() + ' - ' + entry + '\n');
+    fs.appendFileSync('/tmp/invest-data.log', new Date().toISOString() + ' - ' + entry + '\n');
 };
 
 var server = http.createServer(function (req, res) {
@@ -48,13 +49,15 @@ var server = http.createServer(function (req, res) {
 
 function periodicTask() {
     log("Jeff's Periodic Task");
+    dataCollection.setTimeInterval("1d");
+    dataCollection.collectStockData("CSCO");
 }
 
 // Listen on port 3000, IP defaults to 127.0.0.1
 server.listen(port);
 
 // add a periodic task for performing backend management functions
-setInterval(periodicTask, 60000);
+//setInterval(periodicTask, 60000);
 
 // Put a friendly message on the terminal
 console.log('Server running at http://127.0.0.1:' + port + '/');
